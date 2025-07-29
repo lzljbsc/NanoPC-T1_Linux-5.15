@@ -1,0 +1,204 @@
+/*
+ * FriendlyARM's Exynos4412 based NanoPC-T1 board device tree source
+ *
+ * Copyright (c) 2025
+ *
+ * Device tree source file for FriendlyARM's NanoPC-T1 board which is based on
+ * Samsung's Exynos4412 SoC.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+/dts-v1/;
+#include "exynos4412.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "FriendlyARM NanoPC-T1 board based on Exynos4412";
+	compatible = "friendlyarm,nanopc-t1", "samsung,exynos4412", "samsung,exynos4";
+
+	chosen {
+		stdout-path = &serial_0;
+	};
+
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0x40000000 0x40000000>;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led1 {
+			label = "sys";
+			gpios = <&gpm4 0 GPIO_ACTIVE_LOW>;
+			default-state = "off";
+			linux,default-trigger = "heartbeat";
+		};
+
+		led2 {
+			label = "mmcblk0";
+			gpios = <&gpm4 1 GPIO_ACTIVE_LOW>;
+			default-state = "off";
+			linux,default-trigger = "mmc0";
+		};
+
+		led3 {
+			label = "led3";
+			gpios = <&gpm4 2 GPIO_ACTIVE_LOW>;
+			default-state = "off";
+		};
+
+		led4 {
+			label = "led4";
+			gpios = <&gpm4 3 GPIO_ACTIVE_LOW>;
+			default-state = "off";
+		};
+	};
+
+	fixed-rate-clocks {
+		xxti {
+			compatible = "samsung,clock-xxti";
+			clock-frequency = <0>;
+		};
+
+		xusbxti {
+			compatible = "samsung,clock-xusbxti";
+			clock-frequency = <24000000>;
+		};
+
+		pmic_ap_clk: pmic-ap-clk {
+			/* Workaround for missing clock on PMIC */
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <32768>;
+		};
+	};
+};
+
+&cpu_thermal {
+	cooling-maps {
+		cooling_map0: map0 {
+			/* Corresponds to 800MHz at freq_table */
+			cooling-device = <&cpu0 7 7>, <&cpu1 7 7>,
+					 <&cpu2 7 7>, <&cpu3 7 7>;
+		};
+		cooling_map1: map1 {
+			/* Corresponds to 200MHz at freq_table */
+			cooling-device = <&cpu0 13 13>, <&cpu1 13 13>,
+					 <&cpu2 13 13>, <&cpu3 13 13>;
+		};
+	};
+};
+
+&rtc {
+	status = "okay";
+	clocks = <&clock CLK_RTC>, <&pmic_ap_clk>;
+	clock-names = "rtc", "rtc_src";
+};
+
+&sdhci_2 {
+	bus-width = <4>;
+	pinctrl-0 = <&sd2_clk &sd2_cmd &sd2_cd &sd2_bus4>;
+	pinctrl-names = "default";
+	status = "disabled";
+};
+
+&mshc_0 {
+	pinctrl-0 = <&sd4_clk &sd4_cmd &sd4_bus4 &sd4_bus8>;
+	pinctrl-names = "default";
+	broken-cd;
+	card-detect-delay = <200>;
+	samsung,dw-mshc-ciu-div = <3>;
+	samsung,dw-mshc-sdr-timing = <2 3>;
+	samsung,dw-mshc-ddr-timing = <1 2>;
+	bus-width = <8>;
+	cap-mmc-highspeed;
+	status = "okay";
+};
+
+&serial_0 {
+	status = "okay";
+};
+
+&serial_1 {
+	status = "okay";
+};
+
+&serial_2 {
+	status = "okay";
+};
+
+&serial_3 {
+	status = "okay";
+};
+
+&ehci {
+	status = "okay";
+	/* In order to reset USB ethernet */
+	samsung,vbus-gpio = <&gpm2 4 GPIO_ACTIVE_HIGH>;
+
+	port@0 {
+		status = "okay";
+	};
+
+	port@1 {
+		status = "okay";
+	};
+
+	port@2 {
+		status = "okay";
+	};
+};
+
+&ohci {
+	status = "okay";
+	port@0 {
+		status = "okay";
+	};
+};
+
+&exynos_usbphy {
+	status = "okay";
+};
+
+&i2c_0 {
+	status = "okay";
+	samsung,i2c-max-bus-freq = <200000>;
+
+	eeprom@50 {
+		compatible = "24c512";
+		reg = <0x50>;
+	};
+
+	i2c-switch@3 {
+		compatible = "nxp,pca9548";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x03>;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+			i2c-mux-idle-disconnect;
+		};
+
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+			i2c-mux-idle-disconnect;
+		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+			i2c-mux-idle-disconnect;
+		};
+	};
+};
+

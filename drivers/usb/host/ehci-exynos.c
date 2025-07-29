@@ -142,10 +142,17 @@ static void exynos_setup_vbus_gpio(struct device *dev)
 	if (!gpio_is_valid(gpio))
 		return;
 
-	err = devm_gpio_request_one(dev, gpio, GPIOF_OUT_INIT_HIGH,
+	err = devm_gpio_request_one(dev, gpio, GPIOF_OUT_INIT_LOW,
 				    "ehci_vbus_gpio");
-	if (err)
+	if (err) {
 		dev_err(dev, "can't request ehci vbus gpio %d", gpio);
+		return;
+	}
+
+	/* reset */
+	gpio_set_value(gpio, 0);
+	msleep(5);
+	gpio_set_value(gpio, 1);
 }
 
 static int exynos_ehci_probe(struct platform_device *pdev)
