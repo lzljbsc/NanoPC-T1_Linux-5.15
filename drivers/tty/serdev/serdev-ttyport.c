@@ -22,6 +22,9 @@ struct serport {
  * Callback functions from the tty port.
  */
 
+/* tty port 的回调函数
+ * 用于发送完成 或 接收到数据 后调用到 serdev_controller 
+ * 然后再调用到 serdev 设备 的 回调 */
 static int ttyport_receive_buf(struct tty_port *port, const unsigned char *cp,
 				const unsigned char *fp, size_t count)
 {
@@ -247,6 +250,7 @@ static int ttyport_set_tiocm(struct serdev_controller *ctrl, unsigned int set, u
 	return tty->ops->tiocmset(tty, set, clear);
 }
 
+/* serdev_controller 控制器操作回调，提供 tty 操作  */
 static const struct serdev_controller_ops ctrl_ops = {
 	.write_buf = ttyport_write_buf,
 	.write_flush = ttyport_write_flush,
@@ -261,6 +265,9 @@ static const struct serdev_controller_ops ctrl_ops = {
 	.set_tiocm = ttyport_set_tiocm,
 };
 
+/* 注册 serdev_controller 控制器设备
+ * 由 tty 驱动中调用
+ * 注意，如果 serdev 设备注册成功了，对应的tty就不会注册 /dev/ttyX 设备了 */
 struct device *serdev_tty_port_register(struct tty_port *port,
 					struct device *parent,
 					struct tty_driver *drv, int idx)
@@ -301,6 +308,7 @@ err_reset_data:
 	return ERR_PTR(ret);
 }
 
+/* 注销 serdev_controller 控制器设备 */
 int serdev_tty_port_unregister(struct tty_port *port)
 {
 	struct serdev_controller *ctrl = port->client_data;

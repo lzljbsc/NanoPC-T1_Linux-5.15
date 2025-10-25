@@ -24,6 +24,10 @@ struct serdev_device;
  * @write_wakeup:	Function called when ready to transmit more data; must
  *			not sleep.
  */
+/* struct serdev_device_ops - serdev 设备的回调操作
+ * @receive_buf: 使用从设备接收到的数据调用的函数；返回接收到的字节数；可能睡眠；
+ * @write_wakeup: 当准备好传输更多数据时调用的函数；不可休眠；
+ */
 struct serdev_device_ops {
 	int (*receive_buf)(struct serdev_device *, const unsigned char *, size_t);
 	void (*write_wakeup)(struct serdev_device *);
@@ -38,6 +42,13 @@ struct serdev_device_ops {
  * @write_comp	Completion used by serdev_device_write() internally
  * @write_lock	Lock to serialize access when writing data
  */
+/* struct serdev_device - serdev 设备的基本结构
+ * @dev:    设备的驱动程序模型结构
+ * @nr:     serdev 总线上的设备编号
+ * @ctrl:   serdev 控制器管理该设备
+ * @ops:    设备操作结构
+ * @write_comp: serdev_device_write() 内部使用的完成量
+ * @write_lock: 写入数据时锁定以序列化访问，互斥锁 */
 struct serdev_device {
 	struct device dev;
 	int nr;
@@ -47,6 +58,7 @@ struct serdev_device {
 	struct mutex write_lock;
 };
 
+/* 通过驱动模型的设备结构 反查包含它的 serdev_device 结构 */
 static inline struct serdev_device *to_serdev_device(struct device *d)
 {
 	return container_of(d, struct serdev_device, dev);
@@ -59,17 +71,23 @@ static inline struct serdev_device *to_serdev_device(struct device *d)
  * @probe:	binds this driver to a serdev device.
  * @remove:	unbinds this driver from the serdev device.
  */
+/* struct serdev_device_driver - serdev 从设备驱动程序
+ * @driver: 驱动模型的设备驱动结构，应该初始化此结构的 name 字段
+ * @probe:  将此驱动程序绑定到 serdev 设备上
+ * @remove: 解除此驱动程序与 serdev 设备的绑定 */
 struct serdev_device_driver {
 	struct device_driver driver;
 	int	(*probe)(struct serdev_device *);
 	void	(*remove)(struct serdev_device *);
 };
 
+/* 通过驱动模型的设备驱动结构 反查包含它的 serdev_device_driver 结构 */
 static inline struct serdev_device_driver *to_serdev_device_driver(struct device_driver *d)
 {
 	return container_of(d, struct serdev_device_driver, driver);
 }
 
+/* 数据校验方式 */
 enum serdev_parity {
 	SERDEV_PARITY_NONE,
 	SERDEV_PARITY_EVEN,
@@ -79,6 +97,9 @@ enum serdev_parity {
 /*
  * serdev controller structures
  */
+/* serdev 设备控制器结构
+ * 实现了 serdev 设备的操作函数，在 drivers/tty/serdev/serdev-ttyport.c 
+ * 核心是调用原始的 ttyport 回调 */
 struct serdev_controller_ops {
 	int (*write_buf)(struct serdev_controller *, const unsigned char *, size_t);
 	void (*write_flush)(struct serdev_controller *);
@@ -100,6 +121,11 @@ struct serdev_controller_ops {
  * @serdev:	Pointer to slave device for this controller.
  * @ops:	Controller operations.
  */
+/* struct serdev_controller - serdev 控制器接口
+ * @dev:    设备的驱动程序模型表示
+ * @nr:     该控制器/总线的数字标识符
+ * @serdev: 指向该控制器的从属设备的指针
+ * @ops:    控制器操作回调 */
 struct serdev_controller {
 	struct device		dev;
 	unsigned int		nr;
@@ -107,16 +133,19 @@ struct serdev_controller {
 	const struct serdev_controller_ops *ops;
 };
 
+/* 通过驱动模型的设备结构，反查包含它的 serdev_controller 控制器结构 */
 static inline struct serdev_controller *to_serdev_controller(struct device *d)
 {
 	return container_of(d, struct serdev_controller, dev);
 }
 
+/* 获取 serdev 设备的私有数据 这里其实是设备模型结构的私有数据指针 */
 static inline void *serdev_device_get_drvdata(const struct serdev_device *serdev)
 {
 	return dev_get_drvdata(&serdev->dev);
 }
 
+/* 设置 serdev 设备的私有数据 */
 static inline void serdev_device_set_drvdata(struct serdev_device *serdev, void *data)
 {
 	dev_set_drvdata(&serdev->dev, data);
@@ -126,24 +155,28 @@ static inline void serdev_device_set_drvdata(struct serdev_device *serdev, void 
  * serdev_device_put() - decrement serdev device refcount
  * @serdev	serdev device.
  */
+/* 递减 serdev 设备的引用计数 */
 static inline void serdev_device_put(struct serdev_device *serdev)
 {
 	if (serdev)
 		put_device(&serdev->dev);
 }
 
+/* 设置 serdev_device 设备的回调操作 */
 static inline void serdev_device_set_client_ops(struct serdev_device *serdev,
 					      const struct serdev_device_ops *ops)
 {
 	serdev->ops = ops;
 }
 
+/* 获取 serdev_controller 控制器的私有数据 */
 static inline
 void *serdev_controller_get_drvdata(const struct serdev_controller *ctrl)
 {
 	return ctrl ? dev_get_drvdata(&ctrl->dev) : NULL;
 }
 
+/* 设置 serdev_controller 控制器的私有数据 */
 static inline void serdev_controller_set_drvdata(struct serdev_controller *ctrl,
 					       void *data)
 {
@@ -154,16 +187,19 @@ static inline void serdev_controller_set_drvdata(struct serdev_controller *ctrl,
  * serdev_controller_put() - decrement controller refcount
  * @ctrl	serdev controller.
  */
+/* 递减 serdev_controller 控制器的引用计数 */
 static inline void serdev_controller_put(struct serdev_controller *ctrl)
 {
 	if (ctrl)
 		put_device(&ctrl->dev);
 }
 
+/* 分配、注册、移除 serdev 设备 */
 struct serdev_device *serdev_device_alloc(struct serdev_controller *);
 int serdev_device_add(struct serdev_device *);
 void serdev_device_remove(struct serdev_device *);
 
+/* 分配、注册、移除 serdev_controller 控制器 */
 struct serdev_controller *serdev_controller_alloc(struct device *, size_t);
 int serdev_controller_add(struct serdev_controller *);
 void serdev_controller_remove(struct serdev_controller *);
@@ -209,6 +245,7 @@ int serdev_device_write_room(struct serdev_device *);
 /*
  * serdev device driver functions
  */
+/* serdev 设备驱动注册 */
 int __serdev_device_driver_register(struct serdev_device_driver *, struct module *);
 #define serdev_device_driver_register(sdrv) \
 	__serdev_device_driver_register(sdrv, THIS_MODULE)
@@ -217,6 +254,7 @@ int __serdev_device_driver_register(struct serdev_device_driver *, struct module
  * serdev_device_driver_unregister() - unregister an serdev client driver
  * @sdrv:	the driver to unregister
  */
+/* serdev 设备驱动注销 */
 static inline void serdev_device_driver_unregister(struct serdev_device_driver *sdrv)
 {
 	if (sdrv)

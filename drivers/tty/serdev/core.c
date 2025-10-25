@@ -61,17 +61,21 @@ static void serdev_device_release(struct device *dev)
 	kfree(serdev);
 }
 
+/* serdev 设备类型，所有 serdev 共享
+ * 基本属性 及 uevent release 回调  */
 static const struct device_type serdev_device_type = {
 	.groups		= serdev_device_groups,
 	.uevent		= serdev_device_uevent,
 	.release	= serdev_device_release,
 };
 
+/* 检查是否为 serdev 设备，通过 type 成员判断 */
 static bool is_serdev_device(const struct device *dev)
 {
 	return dev->type == &serdev_device_type;
 }
 
+/* serdev_controller 控制器设备 release 回调 */
 static void serdev_ctrl_release(struct device *dev)
 {
 	struct serdev_controller *ctrl = to_serdev_controller(dev);
@@ -79,10 +83,12 @@ static void serdev_ctrl_release(struct device *dev)
 	kfree(ctrl);
 }
 
+/* serdev_controller 控制器的设备类型 */
 static const struct device_type serdev_ctrl_type = {
 	.release	= serdev_ctrl_release,
 };
 
+/* serial bus match 回调 匹配设备与驱动 */
 static int serdev_device_match(struct device *dev, struct device_driver *drv)
 {
 	if (!is_serdev_device(dev))
@@ -99,6 +105,7 @@ static int serdev_device_match(struct device *dev, struct device_driver *drv)
  * serdev_device_add() - add a device previously constructed via serdev_device_alloc()
  * @serdev:	serdev_device to be added
  */
+/* 注册一个 serdev 设备 */
 int serdev_device_add(struct serdev_device *serdev)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -108,6 +115,7 @@ int serdev_device_add(struct serdev_device *serdev)
 	dev_set_name(&serdev->dev, "%s-%d", dev_name(parent), serdev->nr);
 
 	/* Only a single slave device is currently supported. */
+    /* 仅支持一个从设备 */
 	if (ctrl->serdev) {
 		dev_err(&serdev->dev, "controller busy\n");
 		return -EBUSY;
@@ -135,6 +143,7 @@ EXPORT_SYMBOL_GPL(serdev_device_add);
  * serdev_device_remove(): remove an serdev device
  * @serdev:	serdev_device to be removed
  */
+/* 移除一个 serdev 设备 */
 void serdev_device_remove(struct serdev_device *serdev)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -144,6 +153,8 @@ void serdev_device_remove(struct serdev_device *serdev)
 }
 EXPORT_SYMBOL_GPL(serdev_device_remove);
 
+/* 打开 serdev 设备
+ * 直接操作所属控制器的 open 回调 */
 int serdev_device_open(struct serdev_device *serdev)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -172,6 +183,8 @@ err_close:
 }
 EXPORT_SYMBOL_GPL(serdev_device_open);
 
+/* 关闭 serdev 设备
+ * 直接操作所属控制器的 close 回调 */
 void serdev_device_close(struct serdev_device *serdev)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -185,11 +198,13 @@ void serdev_device_close(struct serdev_device *serdev)
 }
 EXPORT_SYMBOL_GPL(serdev_device_close);
 
+/* serdev_device_close 的 devm 版本 */
 static void devm_serdev_device_release(struct device *dev, void *dr)
 {
 	serdev_device_close(*(struct serdev_device **)dr);
 }
 
+/* serdev_device_open 的 devm 版本 */
 int devm_serdev_device_open(struct device *dev, struct serdev_device *serdev)
 {
 	struct serdev_device **dr;
@@ -212,6 +227,7 @@ int devm_serdev_device_open(struct device *dev, struct serdev_device *serdev)
 }
 EXPORT_SYMBOL_GPL(devm_serdev_device_open);
 
+/* serdev_device_write 同步写入数据 的 唤醒回调函数 */
 void serdev_device_write_wakeup(struct serdev_device *serdev)
 {
 	complete(&serdev->write_comp);
@@ -232,6 +248,11 @@ EXPORT_SYMBOL_GPL(serdev_device_write_wakeup);
  *
  * Return: The number of bytes written (less than count if not enough room in
  * the write buffer), or a negative errno on errors.
+ */
+/* serdev 设备 异步写入数据
+ * 将数据异步写入设备
+ * 注意，任何被接受的数据只被控制器缓冲；使用serdev_device_wait_until_sent（）来
+ * 确保控制器写缓冲区实际上已经被清空。 
  */
 int serdev_device_write_buf(struct serdev_device *serdev,
 			    const unsigned char *buf, size_t count)
@@ -266,6 +287,14 @@ EXPORT_SYMBOL_GPL(serdev_device_write_buf);
  * Return: The number of bytes written (less than count if interrupted),
  * -ETIMEDOUT or -ERESTARTSYS if interrupted before any bytes were written, or
  * a negative errno on errors.
+ */
+/* serdev 设备 同步写入数据
+ * 通过重复调用serdev_device_write()，同步地向设备写入数据，直到控制器接受了所有
+ * 数据（除非被超时或信号中断）。
+ * 注意，任何被接受的数据只被控制器缓冲；使用serdev_device_wait_until_sent（）来
+ * 确保控制器写缓冲区实际上已经被清空。
+ * 注意，这个函数依赖于serdev驱动程序write_wakeup（）回调中调用的
+ * serdev_device_write_wakeup（）。
  */
 int serdev_device_write(struct serdev_device *serdev,
 			const unsigned char *buf, size_t count,
@@ -315,6 +344,7 @@ int serdev_device_write(struct serdev_device *serdev,
 }
 EXPORT_SYMBOL_GPL(serdev_device_write);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 void serdev_device_write_flush(struct serdev_device *serdev)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -326,6 +356,7 @@ void serdev_device_write_flush(struct serdev_device *serdev)
 }
 EXPORT_SYMBOL_GPL(serdev_device_write_flush);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 int serdev_device_write_room(struct serdev_device *serdev)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -337,6 +368,7 @@ int serdev_device_write_room(struct serdev_device *serdev)
 }
 EXPORT_SYMBOL_GPL(serdev_device_write_room);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 unsigned int serdev_device_set_baudrate(struct serdev_device *serdev, unsigned int speed)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -349,6 +381,7 @@ unsigned int serdev_device_set_baudrate(struct serdev_device *serdev, unsigned i
 }
 EXPORT_SYMBOL_GPL(serdev_device_set_baudrate);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 void serdev_device_set_flow_control(struct serdev_device *serdev, bool enable)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -360,6 +393,7 @@ void serdev_device_set_flow_control(struct serdev_device *serdev, bool enable)
 }
 EXPORT_SYMBOL_GPL(serdev_device_set_flow_control);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 int serdev_device_set_parity(struct serdev_device *serdev,
 			     enum serdev_parity parity)
 {
@@ -372,6 +406,7 @@ int serdev_device_set_parity(struct serdev_device *serdev,
 }
 EXPORT_SYMBOL_GPL(serdev_device_set_parity);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 void serdev_device_wait_until_sent(struct serdev_device *serdev, long timeout)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -383,6 +418,7 @@ void serdev_device_wait_until_sent(struct serdev_device *serdev, long timeout)
 }
 EXPORT_SYMBOL_GPL(serdev_device_wait_until_sent);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 int serdev_device_get_tiocm(struct serdev_device *serdev)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -394,6 +430,7 @@ int serdev_device_get_tiocm(struct serdev_device *serdev)
 }
 EXPORT_SYMBOL_GPL(serdev_device_get_tiocm);
 
+/* serdev 设备API，直接调用所属控制器的回调函数 */
 int serdev_device_set_tiocm(struct serdev_device *serdev, int set, int clear)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;
@@ -405,6 +442,7 @@ int serdev_device_set_tiocm(struct serdev_device *serdev, int set, int clear)
 }
 EXPORT_SYMBOL_GPL(serdev_device_set_tiocm);
 
+/* serial bus probe 回调，主要作用是调用 serdev 设备的 probe  */
 static int serdev_drv_probe(struct device *dev)
 {
 	const struct serdev_device_driver *sdrv = to_serdev_device_driver(dev->driver);
@@ -421,6 +459,7 @@ static int serdev_drv_probe(struct device *dev)
 	return ret;
 }
 
+/* serial bus remove 回调，主要作用是调用 serdev 设备的 remove */
 static void serdev_drv_remove(struct device *dev)
 {
 	const struct serdev_device_driver *sdrv = to_serdev_device_driver(dev->driver);
@@ -430,6 +469,7 @@ static void serdev_drv_remove(struct device *dev)
 	dev_pm_domain_detach(dev, true);
 }
 
+/* serial bus 类型 */
 static struct bus_type serdev_bus_type = {
 	.name		= "serial",
 	.match		= serdev_device_match,
@@ -444,6 +484,8 @@ static struct bus_type serdev_bus_type = {
  * Caller is responsible for either calling serdev_device_add() to add the
  * newly allocated controller, or calling serdev_device_put() to discard it.
  */
+/* 分配 serdev 设备结构
+ * 需要提供 serdev_controller 控制器，关联到控制器上 */
 struct serdev_device *serdev_device_alloc(struct serdev_controller *ctrl)
 {
 	struct serdev_device *serdev;
@@ -473,6 +515,11 @@ EXPORT_SYMBOL_GPL(serdev_device_alloc);
  * The allocated private data region may be accessed via
  * serdev_controller_get_drvdata()
  */
+/* 分配一个 serdev 控制器
+ * 控制器设备的名字按照 serial[x] 方式命名，依次递增
+ * 注意这里面的 serdev_controller_set_drvdata 
+ * 该函数中多分配了 size 的内存，用于存放私有数据
+ * 并且使用了 serdev_controller_set_drvdata(ctrl, &ctrl[1]); 设置了 */
 struct serdev_controller *serdev_controller_alloc(struct device *parent,
 					      size_t size)
 {
@@ -517,6 +564,8 @@ err_free:
 }
 EXPORT_SYMBOL_GPL(serdev_controller_alloc);
 
+/* 设备树解析，注册 serial 下的所有 serdev 子设备
+ * 将子节点转换为 serdev 设备，注册到 serial bus 中 */
 static int of_serdev_register_devices(struct serdev_controller *ctrl)
 {
 	struct device_node *node;
@@ -524,6 +573,8 @@ static int of_serdev_register_devices(struct serdev_controller *ctrl)
 	int err;
 	bool found = false;
 
+    /* 虽然这里遍历所有节点，但 serdev_device_add 处理中
+     * 仅支持一个从设备，多于一个时会返回失败 */
 	for_each_available_child_of_node(ctrl->dev.of_node, node) {
 		if (!of_get_property(node, "compatible", NULL))
 			continue;
@@ -756,6 +807,7 @@ static inline int acpi_serdev_register_devices(struct serdev_controller *ctrl)
  * Register a controller previously allocated via serdev_controller_alloc() with
  * the serdev core.
  */
+/* 注册一个 serdev 控制器 */
 int serdev_controller_add(struct serdev_controller *ctrl)
 {
 	int ret_of, ret_acpi, ret;
@@ -791,6 +843,9 @@ err_rpm_disable:
 EXPORT_SYMBOL_GPL(serdev_controller_add);
 
 /* Remove a device associated with a controller */
+/* 移除 serdev 控制器 的 每个子设备的移除回调
+ * 检查子设备是否为 serdev_device_type 类型
+ * 是则移除该子设备 */
 static int serdev_remove_device(struct device *dev, void *data)
 {
 	struct serdev_device *serdev = to_serdev_device(dev);
@@ -806,6 +861,8 @@ static int serdev_remove_device(struct device *dev, void *data)
  * Remove a serdev controller.  Caller is responsible for calling
  * serdev_controller_put() to discard the allocated controller.
  */
+/* 移除 serdev 控制器
+ * 会先移除 serdev 控制器下挂的子设备，最后移除自身 */
 void serdev_controller_remove(struct serdev_controller *ctrl)
 {
 	if (!ctrl)
@@ -825,6 +882,7 @@ EXPORT_SYMBOL_GPL(serdev_controller_remove);
  * This API will register the client driver with the serdev framework.
  * It is typically called from the driver's module-init function.
  */
+/* serdev 设备驱动注册 */
 int __serdev_device_driver_register(struct serdev_device_driver *sdrv, struct module *owner)
 {
 	sdrv->driver.bus = &serdev_bus_type;
@@ -837,6 +895,7 @@ int __serdev_device_driver_register(struct serdev_device_driver *sdrv, struct mo
 }
 EXPORT_SYMBOL_GPL(__serdev_device_driver_register);
 
+/* 注销 serial bus */
 static void __exit serdev_exit(void)
 {
 	bus_unregister(&serdev_bus_type);
@@ -844,6 +903,8 @@ static void __exit serdev_exit(void)
 }
 module_exit(serdev_exit);
 
+/* serdev bus 初始化
+ * 这是只是注册一条 serial bus 用于serdev 设备和驱动注册 */
 static int __init serdev_init(void)
 {
 	int ret;
